@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Streaming Test</title>
+    <style>
+        :root {
+            --primary-color: #007bff;
+            --primary-hover: #0056b3;
+            --success-color: #28a745;
+            --success-hover: #218838;
+            --bg-color: #f4f6f9;
+            --chat-bg: #ffffff;
+            --text-color: #333;
+            --border-radius: 12px;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 40px 20px;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            box-sizing: border-box;
+        }
+
+        h1 {
+            text-align: center;
+            margin-bottom: 20px;
+            color: #2c3e50;
+            font-size: 1.8rem;
+        }
+
+        #chat-container {
+            flex: 1;
+            border: 1px solid #e0e0e0;
+            padding: 20px;
+            background: var(--chat-bg);
+            border-radius: var(--border-radius);
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            overflow-y: auto;
+            margin-bottom: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .message {
+            padding: 12px 16px;
+            border-radius: var(--border-radius);
+            max-width: 80%;
+            line-height: 1.5;
+            word-wrap: break-word;
+            position: relative;
+        }
+
+        .user-message {
+            align-self: flex-end;
+            background: var(--primary-color);
+            color: white;
+            border-bottom-right-radius: 2px;
+        }
+
+        /* Style the badge inside user messages */
+        .user-message span {
+            background: rgba(255, 255, 255, 0.2) !important;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+
+        .ai-message {
+            align-self: flex-start;
+            background: #f1f3f5;
+            color: #333;
+            border-bottom-left-radius: 2px;
+        }
+
+        .controls-area {
+            background: white;
+            padding: 20px;
+            border-radius: var(--border-radius);
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        }
+
+        .mode-selector {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .mode-selector label {
+            cursor: pointer;
+            font-size: 0.95rem;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .input-group {
+            display: flex;
+            gap: 10px;
+        }
+
+        input[type="text"] {
+            flex-grow: 1;
+            padding: 12px 15px;
+            font-size: 16px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        input[type="text"]:focus {
+            border-color: var(--primary-color);
+        }
+
+        .btn-group {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        
+        /* Mobile layout adjustment */
+        @media (min-width: 600px) {
+            .input-group {
+                flex-direction: row;
+            }
+            .btn-group {
+                flex-direction: row;
+            }
+        }
+
+        button {
+            padding: 12px 24px;
+            font-size: 15px;
+            font-weight: 600;
+            color: white;
+            border: none;
+            cursor: pointer;
+            border-radius: 8px;
+            transition: background-color 0.2s, transform 0.1s;
+            white-space: nowrap;
+        }
+
+        button:active {
+            transform: scale(0.98);
+        }
+
+        .btn-primary {
+            background-color: var(--primary-color);
+        }
+        .btn-primary:hover {
+            background-color: var(--primary-hover);
+        }
+
+        .btn-success {
+            background-color: var(--success-color);
+        }
+        .btn-success:hover {
+            background-color: var(--success-hover);
+        }
+
+        /* Typing Indicator Animation */
+        #typing-indicator {
+            color: #888;
+            font-style: italic;
+            font-size: 0.9rem;
+            margin-left: 10px;
+            display: flex;
+            align-items: center;
+            gap: 2px;
+        }
+
+        .dots {
+            display: inline-block;
+            width: 0;
+            overflow: hidden;
+            animation: dots 1.5s steps(4, end) infinite;
+            vertical-align: bottom;
+        }
+
+        @keyframes dots {
+            0%, 20% { width: 0; }
+            40% { width: 5px; } /* Adjust depending on font size */
+            60% { width: 10px; }
+            80%, 100% { width: 15px; }
+        }
+    </style>
+</head>
+<body>
+    <h1>🤖 LexBot Streaming Test</h1>
+    
+    <div id="chat-container">
+        </div>
+    
+    <div class="controls-area">
+        <div class="mode-selector">
+            <span style="font-weight: bold; margin-right: 5px;">Mode:</span>
+            <label>
+                <input type="radio" name="mode" value="hybrid" checked /> Hybrid (AI Decides)
+            </label>
+            <label>
+                <input type="radio" name="mode" value="vector" /> Vector (Semantic)
+            </label>
+            <label>
+                <input type="radio" name="mode" value="graph" /> Graph (Structural)
+            </label>
+        </div>
+        
+        <div class="input-group">
+            <input type="text" id="messageInput" placeholder="Type your message here..." autocomplete="off" />
+            <div class="btn-group">
+                <button class="btn-primary" onclick="sendStreaming()">Send (Stream)</button>
+                <button class="btn-success" onclick="sendNormal()">Send (Normal)</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = 'http://localhost:3000';
+        const sessionId = 'test-' + Date.now();
+
+        // Get selected mode
+        function getSelectedMode() {
+            const modeRadios = document.getElementsByName('mode');
+            for (const radio of modeRadios) {
+                if (radio.checked) return radio.value;
+            }
+            return 'hybrid'; // Default
+        }
+
+        // Streaming Request
+        async function sendStreaming() {
+            const input = document.getElementById('messageInput');
+            const message = input.value.trim();
+            if (!message) return;
+
+            const mode = getSelectedMode();
+
+            // Display user message with mode badge
+            addMessage(`${message} <span style="font-size: 0.75rem; vertical-align: middle; margin-left: 8px; padding: 2px 6px; border-radius: 4px;">${mode.toUpperCase()}</span>`, 'user-message');
+            input.value = '';
+            input.focus();
+
+            showTypingIndicator();
+
+            try {
+                const response = await fetch(`${API_URL}/api/chat/stream`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message, sessionId, mode })
+                });
+
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let buffer = '';
+                let displayedText = '';
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+
+                    buffer += decoder.decode(value, { stream: true });
+                    const lines = buffer.split('\n\n');
+                    buffer = lines.pop();
+
+                    for (const line of lines) {
+                        if (line.startsWith('data: ')) {
+                            const data = JSON.parse(line.slice(6));
+                            
+                            if (data.type === 'token') {
+                                displayedText += data.content;
+                                updateStreamingMessage(displayedText);
+                            }
+                            else if (data.type === 'done') {
+                                hideTypingIndicator();
+                                finalizeStreamingMessage();
+                            }
+                            else if (data.type === 'error') {
+                                hideTypingIndicator();
+                                addMessage(`Error: ${data.message}`, 'ai-message');
+                            }
+                        }
+                    }
+                }
+            } catch (error) {
+                hideTypingIndicator();
+                addMessage(`Error: ${error.message}`, 'ai-message');
+            }
+        }
+
+        // Normal Request
+        async function sendNormal() {
+            const input = document.getElementById('messageInput');
+            const message = input.value.trim();
+            if (!message) return;
+
+            const mode = getSelectedMode();
+
+            addMessage(`${message} <span style="font-size: 0.75rem; vertical-align: middle; margin-left: 8px; padding: 2px 6px; border-radius: 4px;">${mode.toUpperCase()}</span>`, 'user-message');
+            input.value = '';
+            input.focus();
+
+            showTypingIndicator();
+
+            try {
+                const response = await fetch(`${API_URL}/api/chat`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message, sessionId, mode })
+                });
+
+                const data = await response.json();
+                hideTypingIndicator();
+                addMessage(data.response, 'ai-message');
+            } catch (error) {
+                hideTypingIndicator();
+                addMessage(`Error: ${error.message}`, 'ai-message');
+            }
+        }
+
+        function addMessage(text, className) {
+            const container = document.getElementById('chat-container');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${className}`;
+            messageDiv.innerHTML = text;
+            container.appendChild(messageDiv);
+            container.scrollTop = container.scrollHeight;
+        }
+
+        function showTypingIndicator() {
+            const container = document.getElementById('chat-container');
+            // Remove existing indicator if any
+            hideTypingIndicator();
+            
+            const indicator = document.createElement('div');
+            indicator.id = 'typing-indicator';
+            indicator.className = 'ai-message'; // Match AI bubble style for consistency
+            // Just usage: LexBot is typing...
+            indicator.innerHTML = 'LexBot is thinking<span class="dots">...</span>';
+            container.appendChild(indicator);
+            container.scrollTop = container.scrollHeight;
+        }
+
+        function hideTypingIndicator() {
+            const indicator = document.getElementById('typing-indicator');
+            if (indicator) indicator.remove();
+        }
+
+        function updateStreamingMessage(text) {
+            let messageDiv = document.getElementById('streaming-message');
+            if (!messageDiv) {
+                hideTypingIndicator();
+                messageDiv = document.createElement('div');
+                messageDiv.id = 'streaming-message';
+                messageDiv.className = 'message ai-message';
+                document.getElementById('chat-container').appendChild(messageDiv);
+            }
+            messageDiv.innerHTML = text;
+            const container = document.getElementById('chat-container');
+            container.scrollTop = container.scrollHeight;
+        }
+
+        function finalizeStreamingMessage() {
+            const messageDiv = document.getElementById('streaming-message');
+            if (messageDiv) {
+                messageDiv.id = ''; // Remove streaming ID
+            }
+        }
+
+        // Allow Enter key to send
+        document.getElementById('messageInput').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') sendStreaming();
+        });
+    </script>
+</body>
+</html>
