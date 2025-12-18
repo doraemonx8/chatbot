@@ -2,11 +2,11 @@ import express from 'express';
 import jwt from 'jsonwebtoken';
 import pool from '../utils/db.js';
 import { sendOtpEmail } from '../utils/emailService.js';
+import { authLimiter } from '../middleware/rateLimit.js';
 
 const router = express.Router();
 
-// 1. Request OTP
-router.post('/send-otp', async (req, res) => {
+router.post('/send-otp', authLimiter, async (req, res) => {
     const { email } = req.body;
     if (!email) return res.status(400).json({ error: "Email is required" });
 
@@ -35,7 +35,6 @@ router.post('/send-otp', async (req, res) => {
     }
 });
 
-// 2. Verify OTP & Get Token
 router.post('/verify-otp', async (req, res) => {
     const { email, otp } = req.body;
     if (!email || !otp) return res.status(400).json({ error: "Email and OTP required" });

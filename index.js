@@ -5,6 +5,7 @@ import chatbot from './utils/chatWorkflow.js';
 import cors from "cors";
 import authRoutes from './routes/auth.js';
 import { authenticateToken } from './middleware/authMiddleware.js';
+import { chatLimiter } from './middleware/rateLimit.js';
 
 dotenv.config();
 
@@ -18,7 +19,7 @@ const sessions = {};
 
 app.use('/api/auth', authRoutes);
 
-app.post('/api/chat', authenticateToken, async (req, res) => {
+app.post('/api/chat', authenticateToken, chatLimiter, async (req, res) => {
     try {
         const { message, sessionId = 'default-session', mode = 'hybrid' } = req.body;
 
@@ -59,7 +60,7 @@ app.post('/api/chat', authenticateToken, async (req, res) => {
     }
 });
 
-app.post('/api/chat/stream', authenticateToken, async (req, res) => {
+app.post('/api/chat/stream', authenticateToken, chatLimiter, async (req, res) => {
     try {
         const { message, sessionId = 'default-session', mode = 'hybrid' } = req.body;
 
@@ -157,7 +158,7 @@ const validateSession = (state) => {
 };
 
 // Get session info
-app.get('/api/session/:sessionId', (req, res) => {
+app.get('/api/session/:sessionId', authenticateToken, (req, res) => {
     const { sessionId } = req.params;
     const session = sessions[sessionId];
     
