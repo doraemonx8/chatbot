@@ -38,28 +38,35 @@ const calculateMissingFields=(params)=> {
   }
 
 
+const formatDataForPrompt = (data) => {
+  let text = ``;
 
-const formatDataForPrompt=(data)=>{
+  data && data.forEach((obj) => {
+    Object.keys(obj).forEach((key) => {
+      let value = obj[key];
 
-  let text=``;
+      if (value === null || value === undefined) return;
 
-  data && data.forEach((obj)=>{
-
-    Object.keys(obj).forEach((key)=>{
-
-      const value=obj[key];
-
-      if(value && value.length){
-        text+=`${key.replace("_"," ")} : ${value.replaceAll("\n",";")}\n`
+      // Convert Arrays/Objects to JSON string so they don't crash .replace
+      if (typeof value === 'object') {
+        value = JSON.stringify(value);
+      } else {
+        // Ensure numbers/booleans are strings
+        value = String(value);
       }
-      
+
+      // Now safely perform string operations
+      if (value.length > 0) {
+        // Use regex to replace ALL occurrences (equivalent to replaceAll)
+        text += `${key.replace(/_/g, " ")} : ${value.replace(/\n/g, ";")}\n`;
+      }
     });
 
-    text+='\n\n';
+    text += '\n\n';
   });
 
   return text;
-}
+};
   
   
  

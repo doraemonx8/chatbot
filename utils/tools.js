@@ -24,21 +24,82 @@ class GraphTool {
     try {
       const schema = await this.graph.getSchema();
       const prompt = `
-      Task: Generate a Cypher statement to query a Neo4j graph database.
-      
-      Schema:
-      ${schema}
+        You are a STRICT Cypher query generator for a Neo4j Knowledge Graph used in LexCompliance.
 
-      Instructions:
-      - Use the provided schema to write a Cypher query that answers the user's question.
-      - Do NOT include any explanations or markdown formatting (like \`\`\`cypher).
-      - Return ONLY the raw Cypher query string.
-      - **CRITICAL:** When searching for names (Forms, Sections, Acts), ALWAYS use the \`CONTAINS\` operator (case-insensitive) instead of exact matching.
-        - Example: Instead of \`f.name = 'XXII'\`, use \`toLower(f.name) CONTAINS toLower('XXII')\`.
-      - Return the specific node properties (like description, criticality) rather than just the node itself so the chatbot can read it easily.
-      
-      User Question: "${userQuestion}"
-      `;
+        Your task is to generate a VALID Cypher query that retrieves data ONLY from the Knowledge Graph.
+        You MUST strictly follow the rules below.
+
+        --------------------------------
+        SCHEMA (SOURCE OF TRUTH)
+        --------------------------------
+        ${schema}
+
+        --------------------------------
+        CORE RULES (MANDATORY)
+        --------------------------------
+
+        1. OUTPUT FORMAT
+        - Return ONLY raw Cypher
+        - No markdown
+        - No explanations
+        - No comments
+        - No backticks
+
+        2. KNOWLEDGE GRAPH ONLY
+        - You MUST fetch answers ONLY using nodes and relationships present in the schema
+        - NEVER invent facts, values, or relationships
+        - If something is not present in the graph, still generate the closest valid query
+
+        3. ENTITY MATCHING (VERY IMPORTANT)
+        When matching names (Form, Act, Rule, Section, Authority, Topic, State):
+
+         ALWAYS normalize strings using this pattern:
+        replace(toLower(x.name), '-', ' ')
+        CONTAINS
+        replace(toLower('<VALUE_FROM_QUERY>'), '-', ' ')
+
+         NEVER use direct equality or raw CONTAINS without normalization
+
+        4. ENTITY PRIORITY
+        - If the query mentions:
+          - Form → start from (:Form)
+          - Act → start from (:Act)
+          - Section → start from (:Section)
+          - Rule → start from (:Rule)
+          - Authority → start from (:Authority)
+          - Compliance → start from (:Compliance)
+          - State → start from (:State)
+
+        5. RELATIONSHIP USAGE
+        - Use ONLY relationships defined in the schema
+        - Prefer directed relationships
+        - Use OPTIONAL MATCH when relationships may not exist
+
+        6. QUERY STRUCTURE (STANDARD)
+        - Start from the primary entity
+        - Traverse relationships to related entities
+        - Return readable properties only (name, description, penalty, criticality, etc.)
+        - DO NOT return entire nodes
+
+        7. SAFE DEFAULTS
+        - If multiple entities are possible, choose the most specific one
+        - If unsure about relationship existence, use OPTIONAL MATCH
+
+        --------------------------------
+        RETURN GUIDELINES
+        --------------------------------
+        - Always alias returned fields
+        - Prefer:
+          name, purpose, description, penalty, criticality, periodicity,
+          applicabilityFull, authority name, siteUrl, isOnline
+
+        --------------------------------
+        USER QUESTION
+        --------------------------------
+        "${userQuestion}"
+        `;
+
+
 
       const response = await this.llm.invoke([new HumanMessage(prompt)]);
       let cypher = response.content.replace(/```cypher/g, "").replace(/```/g, "").trim();
@@ -63,8 +124,27 @@ class ParamExtractorTool {
     }).withStructuredOutput({
       type: "object",
       properties: {
+        isOffTopic: { 
+          type: "boolean", 
+          description: "Set to TRUE if the user query is unrelated to Indian Law, Acts, or Compliance (e.g., cooking, weather, general chat). Set FALSE for greetings ('Hi') or legal queries." 
+        },
         geographyType: { type: "string", enum: ["central", "state", "both"], description: "Level of governance" },
-        state: { type: "string", description: "State name (if applicable)" },
+        state: { type: "string", description: "State name (e.g., 'Haryana') or null" },
+
+        // --- LEGAL SPECIFICS ---
+        actName: { type: "string", description: "Specific Act name if mentioned" },
+        section: { type: "string", description: "Section number (e.g., '60')" },
+        rule: { type: "string", description: "Rule number" },
+        formName: { type: "string", description: "Form name (e.g., 'Form M-5', 'Form XXII')" },
+        
+        subHead: { type: "string", description: "The specific topic or category (e.g., 'Registration', 'Returns', 'Maternity Benefit', 'Registers')" },
+        criticality: { type: "string", enum: ["High", "Medium", "Low"], description: "Risk level mentioned" },
+        periodicity: { type: "string", description: "Frequency (Annual, Monthly, Event Based)" },
+        department: { type: "string", description: "Department name (e.g., 'Labour')" },
+        authority: { type: "string", description: "Official authority (e.g., 'Inspector-cum-Facilitator', 'Chief Inspector')" },
+        complianceType: { type: "string", description: "Type of compliance (e.g., 'Statutory')" },
+        potentialImpact: { type: "string", description: "Consequence or penalty mentioned (e.g., 'Fine', 'Imprisonment', 'Prosecution')" },
+        triggerEvent: { type: "string", description: "Event that triggers the compliance (e.g., 'Hiring', 'Termination', 'Confinement', 'Delivery')" }
       },
       required: ["geographyType", "state"],
     });
@@ -126,7 +206,7 @@ class Agent{
       };
     }
 
-    // 🔄 Hybrid Mode -> Let AI Decide
+    // Hybrid Mode
     console.log("🔄 Mode: Hybrid (Using SelectToolPrompt)");
     const result = await this.llm.invoke([
       new SystemMessage(SelectToolPrompt),

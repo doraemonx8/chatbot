@@ -50,6 +50,10 @@ class ChatWorkflow {
     //   state.params.isOffTopic ? "respond" : "validateState"
     // );
 
+    // this.workflow.addConditionalEdges("validateState", (state) =>
+    //   state.params.stateNotSupported ? "respond" : "fetch"
+    // );
+
     this.workflow.addConditionalEdges("extractAndSelectTool", (state) =>
       state.params.stateNotSupported ? "respond" : "fetch"
     );
@@ -60,161 +64,143 @@ class ChatWorkflow {
   }
 
 //node state validate
-  async _validateStateAvailability(state) {
-    const requestedState = state.params.state?.toLowerCase();
-    const geographyType = state.params.geographyType;
+  // async _validateStateAvailability(state) {
+  //   const requestedState = state.params.state?.toLowerCase();
+  //   const geographyType = state.params.geographyType;
 
-    // ✅ If central or no state specified, allow
-    if (geographyType === "central" || !requestedState) {
-      return { params: { stateNotSupported: false } };
-    }
+  //   // If central or no state specified, allow
+  //   if (geographyType === "central" || !requestedState) {
+  //     return { params: { stateNotSupported: false } };
+  //   }
 
-    // ❌ If state is mentioned but not supported
-    if (!SUPPORTED_STATES.includes(requestedState)) {
-      console.log(`⚠️  Unsupported state requested: ${requestedState}`);
-      return {
-        params: { 
-          stateNotSupported: true,
-          unsupportedStateMessage: `I currently only have data for Haryana. ${requestedState.charAt(0).toUpperCase() + requestedState.slice(1)} compliance data is not yet available. Would you like information on Haryana's maternity benefit rules instead?`
-        }
-      };
-    }
+  //   // If state is mentioned but not supported
+  //   if (!SUPPORTED_STATES.includes(requestedState)) {
+  //     console.log(`⚠️  Unsupported state requested: ${requestedState}`);
+  //     return {
+  //       params: { 
+  //         stateNotSupported: true,
+  //         unsupportedStateMessage: `I currently only have data for Haryana. ${requestedState.charAt(0).toUpperCase() + requestedState.slice(1)} compliance data is not yet available. Would you like information on Haryana's maternity benefit rules instead?`
+  //       }
+  //     };
+  //   }
 
-    // ✅ State is supported
-    return { params: { stateNotSupported: false } };
-  }
+  //   // State is supported
+  //   return { params: { stateNotSupported: false } };
+  // }
 //node Extract Parameters & Select Tool
 
-  async _extractSelectTool(state) {
-      try {
-        const fnStart = performance.now();
-        const lastMessage = state.memory[state.memory.length - 1]?.content || "";
+async _extractSelectTool(state) {
+    try {
+      const fnStart = performance.now();
+      const lastMessage = state.memory[state.memory.length - 1]?.content || "";
 
-        const context = state.memory.slice(-3).map((message) => {
-          const from = message.id ? message.id[2] : message.constructor.name;
-          return `${from.includes("Human") ? `User : ${message.content || message.kwargs.content}` : `AI : ${message.content || message.kwargs.content}`}`;
-        }).join("\n");
+      // Prepare context for Hybrid mode tool selection
+      const context = state.memory.slice(-3).map((message) => {
+        const from = message.id ? message.id[2] : message.constructor.name;
+        return `${from.includes("Human") ? `User : ${message.content || message.kwargs.content}` : `AI : ${message.content || message.kwargs.content}`}`;
+      }).join("\n");
 
-        const currentMode = state.params.mode || "hybrid";
+      const currentMode = state.params.mode || "hybrid";
 
-        let selectedTool = null;
-        let newParams = null;
+      let selectedTool = null;
+      let newParams = null;
+      let extractionTime = 0;
 
-        let extractionTime = 0;
-        let selectionTime = 0;
-        let retrievalTime = 0;
-
-        // Extraction & Selection
-        if (currentMode === "vector") {
-          console.log("🔒 Mode: Vector Only (Forcing getQueryContext)");
-
-          const t1 = performance.now();
-          newParams = await extractor.extract(lastMessage, state.memory);
-          extractionTime = performance.now() - t1;
-
-          selectedTool = {
-            toolName: "getQueryContext",
-            isOffTopic: false,
-            isDataRelevant: false,
-            query: lastMessage,
-            dataType: "all"
-          };
-
-        } else if (currentMode === "graph") {
-          console.log("🔒 Mode: Graph Only (Forcing graphQA)");
-
-          const t1 = performance.now();
-          newParams = await extractor.extract(lastMessage, state.memory);
-          extractionTime = performance.now() - t1;
-
-          selectedTool = {
-            toolName: "graphQA",
-            isOffTopic: false,
-            isDataRelevant: false,
-            query: lastMessage,
-            dataType: "all"
-          };
-
-        } else {
-          console.log("🔄 Mode: Hybrid (Running full tool selection)");
-
-          const t1 = performance.now();
-          const extractPromise = extractor.extract(lastMessage, state.memory);
-
-          const selectPromise = agent.getTool(`
-            Context : ${context}
-            Data : ${JSON.stringify(state.params.data)}
-          `, currentMode);
-
-          const [extractedParams, toolResult] = await Promise.all([extractPromise, selectPromise]);
-          const t2 = performance.now();
-
-          extractionTime = "N/A (Parallel)";
-          selectionTime = "N/A (Parallel)";
-          console.log(`⏱️  Extraction & Selection (Parallel): ${(t2 - t1).toFixed(2)} ms`);
-
-          newParams = extractedParams;
-          selectedTool = toolResult;
+      // Vector or Graph Mode (Skips Tool Selection LLM)
+      if (currentMode === "vector") {
+        console.log("🔒 Mode: Vector Only (Forcing getQueryContext)");
+        const t1 = performance.now();
+        newParams = await extractor.extract(lastMessage, state.memory);
+        if (newParams.isOffTopic) {
+                console.log("🚫 Off-topic detected (Vector Mode). Skipping fetch.");
+                return { params: { ...newParams, isOffTopic: true } };
         }
+        extractionTime = performance.now() - t1;
 
-        if (currentMode !== "hybrid") {
-          console.log(`⏱️  Extraction Time: ${extractionTime.toFixed(2)} ms`);
-          console.log(`⏱️  Selection Time: Skipped (Mode Override)`);
-        }
-
-        const existingParams = state.params || {};
-        const mergedParams = Object.keys(existingParams).reduce((acc, key) => {
-          acc[key] = newParams[key] ? newParams[key] : existingParams[key];
-          return acc;
-        }, { ...newParams });
-
-        // Pre-fetching (only if state is valid - will be checked in next node)
-        let fetchedData = null;
-
-        if (selectedTool && selectedTool.toolName && !selectedTool.isOffTopic) {
-          console.log(`⚡ Pre-fetching data for ${selectedTool.toolName}...`);
-
-          const tFetchStart = performance.now();
-
-          const tempState = {
-            params: {
-              ...mergedParams,
-              tool: selectedTool.toolName,
-              query: selectedTool.query,
-              dataType: selectedTool.dataType,
-              data: state.params.data || []
-            }
-          };
-
-          const fetchResult = await this._fetchDataByTool(tempState);
-          fetchedData = fetchResult.params?.data || [];
-
-          retrievalTime = performance.now() - tFetchStart;
-          console.log(`⏱️  Retrieval Time: ${retrievalTime.toFixed(2)} ms (Fetched ${fetchedData.length} results)`);
-        }
-
-        const finalTool = selectedTool.toolName || "getQueryContext";
-        const fnEnd = performance.now();
-
-        console.log("🛠️  Selected Tool:", finalTool);
-        console.log(`⏱️  TOTAL _extractSelectTool Time: ${(fnEnd - fnStart).toFixed(2)} ms`);
-        console.log("------------------------------------------------");
-
-        return {
-          params: {
-            ...mergedParams,
-            tool: finalTool,
-            isOffTopic: selectedTool.isOffTopic,
-            isDataRelevant: fetchedData !== null,
-            query: selectedTool.query,
-            dataType: selectedTool.dataType,
-            data: fetchedData || mergedParams.data
-          },
+        selectedTool = {
+          toolName: "getQueryContext",
+          query: lastMessage,
+          dataType: "all"
         };
-      } catch (err) {
-        console.error("Error in _extractSelectTool:", err);
+
+      } else if (currentMode === "graph") {
+        console.log("🔒 Mode: Graph Only (Forcing graphQA)");
+        const t1 = performance.now();
+        newParams = await extractor.extract(lastMessage, state.memory);
+        if (newParams.isOffTopic) {
+                console.log("🚫 Off-topic detected (Graph Mode). Skipping fetch.");
+                return { params: { ...newParams, isOffTopic: true } };
+        }
+        extractionTime = performance.now() - t1;
+
+        selectedTool = {
+          toolName: "graphQA",
+          query: lastMessage,
+          dataType: "all"
+        };
+
+      } else {
+        // Hybrid Mode (Uses AI to Select Tool)
+        console.log("🔄 Mode: Hybrid (Running full tool selection)");
+        const t1 = performance.now();
+        
+        // const extractPromise = extractor.extract(lastMessage, state.memory);
+        // const selectPromise = agent.getTool(`
+        //   Context : ${context}
+        //   Data : ${JSON.stringify(state.params.data)}
+        // `, currentMode);
+
+        // const [extractedParams, toolResult] = await Promise.all([extractPromise, selectPromise]);
+        const [extractedParams, toolResult] = await Promise.all([
+                extractor.extract(lastMessage, state.memory),
+                agent.getTool(lastMessage)
+            ]);
+        const t2 = performance.now();
+
+        console.log(`⏱️  Extraction & Selection (Parallel): ${(t2 - t1).toFixed(2)} ms`);
+        newParams = extractedParams;
+        if (newParams.isOffTopic) {
+                console.log("🚫 Off-topic detected (Hybrid Mode). Overriding tool selection.");
+                return { params: { ...newParams, isOffTopic: true } };
+        }
+        selectedTool = toolResult;
       }
+
+      if (currentMode !== "hybrid") {
+        console.log(`⏱️  Extraction Time: ${extractionTime.toFixed(2)} ms`);
+        console.log(`⏱️  Selection Time: Skipped (Mode Override)`);
+      }
+
+      // Merge params
+      const existingParams = state.params || {};
+      const mergedParams = Object.keys(existingParams).reduce((acc, key) => {
+        acc[key] = newParams[key] ? newParams[key] : existingParams[key];
+        return acc;
+      }, { ...newParams });
+
+      const finalTool = selectedTool.toolName || "getQueryContext";
+      const fnEnd = performance.now();
+
+      console.log("🛠️  Selected Tool:", finalTool);
+      console.log(`⏱️  TOTAL _extractSelectTool Time: ${(fnEnd - fnStart).toFixed(2)} ms`);
+      console.log("------------------------------------------------");
+
+      return {
+        params: {
+          ...mergedParams,
+          tool: finalTool,
+          isOffTopic: false,
+          isDataRelevant: false, // Will be set to true after the 'fetch' node runs
+          query: selectedTool.query,
+          dataType: selectedTool.dataType,
+          data: state.params.data || [] 
+        },
+      };
+    } catch (err) {
+      console.error("Error in _extractSelectTool:", err);
+      return { params: { isOffTopic: false } };
     }
+}
 
 //node Fetch Data by Tool
 
@@ -279,9 +265,6 @@ class ChatWorkflow {
     return { memory: [response] };
   }
 
-  // ========================================================================
-  // Helper Methods
-  // ========================================================================
   async _handleOffTopic(memory) {
     const context = memory.slice(-3).map((message) => {
       return { content: message.content || message.kwargs.content, from: message.id ? message.id[2] : message.constructor.name };
@@ -294,6 +277,17 @@ class ChatWorkflow {
   }
 
   async _handleGeneralQuery(memory, queryData, isStream = false) {
+    const isDataEmpty = !queryData || (Array.isArray(queryData) && queryData.length === 0);
+
+    if (isDataEmpty) {
+      const fallbackMsg = "I currently do not have specific data regarding this topic in my knowledge base. My coverage is currently limited to specific Acts and Rules ingested into the system. Would you like to try searching for a different compliance topic?";
+      
+      if (isStream) {
+          return (async function*() { yield { content: fallbackMsg }; })();
+      } else {
+          return new AIMessage(fallbackMsg);
+      }
+    }
     const context = memory.slice(-5).map((message) => {
       const from = message.id ? message.id[2] : message.constructor.name;
       return from.includes("Human")
@@ -321,10 +315,7 @@ class ChatWorkflow {
   }
 
   //stream
-
-// ========================================================================
-  // Streaming Methods
-  // ========================================================================
+  
   async *_generateResponseStream(state) {
     const start = performance.now();
 
@@ -387,8 +378,8 @@ class ChatWorkflow {
     state = { ...state, params: { ...state.params, ...extracted.params } };
 
     // Validate state availability
-    const validated = await this._validateStateAvailability(state);
-    state = { ...state, params: { ...state.params, ...validated.params } };
+    // const validated = await this._validateStateAvailability(state);
+    // state = { ...state, params: { ...state.params, ...validated.params } };
 
     // Fetch data if state is valid and not off-topic
     if (!state.params.isOffTopic && !state.params.stateNotSupported) {
