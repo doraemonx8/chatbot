@@ -243,7 +243,7 @@ async _extractSelectTool(state) {
 
       case "getQueryContext":
         const params = {
-          scope: state.params.geographyType,
+          scope: state.params.geographyType === 'both' ? 'all' : state.params.geographyType,
           state: state.params.state,
           type: state.params.dataType,
         };

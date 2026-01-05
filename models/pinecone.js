@@ -24,10 +24,9 @@ export const getQueryContext = async (query, params = {}) => {
         
         const filter = {};
 
-        // Geography
+        // Keep your existing filter logic
         if (params.state && params.state !== 'all') filter.state = params.state.toLowerCase();
         if (params.scope && params.scope !== 'all') filter.scope = params.scope.toLowerCase();
-
         if (params.subHead) filter.subHead = params.subHead;
         if (params.criticality) filter.criticality = params.criticality;
         if (params.periodicity) filter.periodicity = params.periodicity;
@@ -37,18 +36,30 @@ export const getQueryContext = async (query, params = {}) => {
         if (params.authority) filter.authority = params.authority;
         if (params.triggerEvent) filter.triggerEvent = params.triggerEvent;
 
-        const queryResponse = await index.query({
+        // Attempt STRICT search first
+        let queryResponse = await index.query({
             vector: vector,
             topK: 3,
             includeMetadata: true,
             filter: Object.keys(filter).length > 0 ? filter : undefined
         });
 
-        console.log(`✅ Pinecone Matches Found: ${queryResponse.matches.length}`);
+        console.log(`✅ Strict Pinecone Matches: ${queryResponse.matches.length}`);
+
+        // If strict search failed, try again without filters
+        if (queryResponse.matches.length === 0 && Object.keys(filter).length > 0) {
+            console.log("⚠️ Strict filters yielded 0 results. Relaxing search (removing filters)...");
+            queryResponse = await index.query({
+                vector: vector,
+                topK: 3, 
+                includeMetadata: true
+            });
+            
+            console.log(`✅ Relaxed Pinecone Matches: ${queryResponse.matches.length}`);
+        }
 
         const data = queryResponse.matches.map((match) => {
             console.log(`[Score: ${match.score.toFixed(4)}] Content: ${match.id}...`);
-            
             return {
                 ...match.metadata,
                 score: match.score
