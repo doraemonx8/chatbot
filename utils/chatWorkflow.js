@@ -21,6 +21,10 @@ class ChatWorkflow {
 
     this.workflow = new StateGraph({
       channels: {
+        sessionId: {
+          value: (prev, next) => next || prev,
+          default: () => null,
+        },
         memory: {
           value: (prev, next) => [...prev, ...next],
           default: () => [],
@@ -87,10 +91,37 @@ class ChatWorkflow {
   //   // State is supported
   //   return { params: { stateNotSupported: false } };
   // }
+
+  // Validate that memory belongs to current session
+  _validateSessionMemory(state) {
+    const currentSessionId = state.sessionId;
+    const memoryLength = state.memory?.length || 0;
+
+    console.log(`🔍 Session Validation:`);
+    console.log(`   Current Session ID: ${currentSessionId}`);
+    console.log(`   Memory Count: ${memoryLength}`);
+
+    if (!currentSessionId) {
+      console.warn("⚠️  No session ID provided! Memory isolation may fail.");
+      return false;
+    }
+
+    if (memoryLength === 0) {
+      console.log("✅ New session - memory is empty (as expected)");
+      return true;
+    }
+
+    console.log("✅ Existing session - using stored memory");
+    return true;
+  }
+
 //node Extract Parameters & Select Tool
 
 async _extractSelectTool(state) {
     try {
+
+      this._validateSessionMemory(state);
+
       const fnStart = performance.now();
       const lastMessage = state.memory[state.memory.length - 1]?.content || "";
 
@@ -113,7 +144,7 @@ async _extractSelectTool(state) {
         newParams = await extractor.extract(lastMessage, state.memory);
         if (newParams.isOffTopic) {
                 console.log("🚫 Off-topic detected (Vector Mode). Skipping fetch.");
-                return { params: { ...newParams, isOffTopic: true } };
+                return { sessionId: state.sessionId, params: { ...newParams, isOffTopic: true } };
         }
         extractionTime = performance.now() - t1;
 
@@ -129,7 +160,7 @@ async _extractSelectTool(state) {
         newParams = await extractor.extract(lastMessage, state.memory);
         if (newParams.isOffTopic) {
                 console.log("🚫 Off-topic detected (Graph Mode). Skipping fetch.");
-                return { params: { ...newParams, isOffTopic: true } };
+                return { sessionId: state.sessionId, params: { ...newParams, isOffTopic: true } };
         }
         extractionTime = performance.now() - t1;
 
@@ -144,13 +175,6 @@ async _extractSelectTool(state) {
         console.log("🔄 Mode: Hybrid (Running full tool selection)");
         const t1 = performance.now();
         
-        // const extractPromise = extractor.extract(lastMessage, state.memory);
-        // const selectPromise = agent.getTool(`
-        //   Context : ${context}
-        //   Data : ${JSON.stringify(state.params.data)}
-        // `, currentMode);
-
-        // const [extractedParams, toolResult] = await Promise.all([extractPromise, selectPromise]);
         const [extractedParams, toolResult] = await Promise.all([
                 extractor.extract(lastMessage, state.memory),
                 agent.getTool(lastMessage)
@@ -161,7 +185,7 @@ async _extractSelectTool(state) {
         newParams = extractedParams;
         if (newParams.isOffTopic) {
                 console.log("🚫 Off-topic detected (Hybrid Mode). Overriding tool selection.");
-                return { params: { ...newParams, isOffTopic: true } };
+                return { sessionId: state.sessionId, params: { ...newParams, isOffTopic: true } };
         }
         selectedTool = toolResult;
       }
@@ -186,6 +210,7 @@ async _extractSelectTool(state) {
       console.log("------------------------------------------------");
 
       return {
+        sessionId: state.sessionId,
         params: {
           ...mergedParams,
           tool: finalTool,
@@ -211,6 +236,7 @@ async _extractSelectTool(state) {
       case "graphQA":
         const graphData = await graphTool.queryGraph(state.params.query);
         return {
+          sessionId: state.sessionId,
           memory: [new AIMessage("I have retrieved specific structural data from the Knowledge Graph.")],
           params: { data: graphData }
         };
@@ -223,11 +249,13 @@ async _extractSelectTool(state) {
         };
         const { data } = await getQueryContext(state.params.query, params);
         return {
+          sessionId: state.sessionId,
           params: { data }
         };
 
       default:
         return {
+          sessionId: state.sessionId,
           memory: [new AIMessage("No tool could be identified for the request.")],
           params: { isOffTopic: true }
         };
@@ -241,12 +269,14 @@ async _extractSelectTool(state) {
     const start = performance.now();
     let response;
 
+    console.log(`📝 Generating response for session: ${state.sessionId}`);
+
     // Handle unsupported state
     if (state.params.stateNotSupported) {
       response = new AIMessage(state.params.unsupportedStateMessage);
       const end = performance.now();
       console.log(`Time taken to respond (unsupported state): ${(end - start).toFixed(2)} ms`);
-      return { memory: [response] };
+      return { sessionId: state.sessionId, memory: [response] };
     }
 
     // Handle off-topic
@@ -254,7 +284,7 @@ async _extractSelectTool(state) {
       response = await this._handleOffTopic(state.memory);
       const end = performance.now();
       console.log(`Time taken to respond (off-topic): ${(end - start).toFixed(2)} ms`);
-      return { memory: [response] };
+      return { sessionId: state.sessionId, memory: [response] };
     }
 
     // Handle general query
@@ -262,7 +292,7 @@ async _extractSelectTool(state) {
     const end = performance.now();
     console.log(`Time taken to respond: ${(end - start).toFixed(2)} ms`);
 
-    return { memory: [response] };
+    return { sessionId: state.sessionId, memory: [response] };
   }
 
   async _handleOffTopic(memory) {
@@ -309,8 +339,14 @@ async _extractSelectTool(state) {
   }
 
   async processMessage(message, state) {
+    if (!state.sessionId) {
+      console.warn("⚠️  Processing message without session ID!");
+      state.sessionId = `temp-${Date.now()}`;
+    }
+    console.log(`🔄 Processing message for session: ${state.sessionId}`);
     state.memory.push(new HumanMessage(message));
     const newState = await this.compiled.invoke(state);
+    newState.sessionId = state.sessionId;
     return newState;
   }
 
@@ -320,11 +356,13 @@ async _extractSelectTool(state) {
     const start = performance.now();
 
     try {
+      console.log(`📝 [STREAM] Generating response for session: ${state.sessionId}`);
       // Handle unsupported state
       if (state.params.stateNotSupported) {
         const response = new AIMessage(state.params.unsupportedStateMessage);
         this.finalState = {
           ...state,
+          sessionId: state.sessionId,
           memory: [...state.memory, response]
         };
         yield response.content;
@@ -336,6 +374,7 @@ async _extractSelectTool(state) {
         const response = await this._handleOffTopic(state.memory);
         this.finalState = {
           ...state,
+          sessionId: state.sessionId,
           memory: [...state.memory, response]
         };
         yield response.content;
@@ -357,6 +396,7 @@ async _extractSelectTool(state) {
 
       this.finalState = {
         ...state,
+        sessionId: state.sessionId,
         memory: [...state.memory, new AIMessage(fullResponse)]
       };
 
@@ -367,15 +407,21 @@ async _extractSelectTool(state) {
   }
 
   async *processMessageStream(message, state) {
+    if (!state.sessionId) {
+      console.warn("⚠️  [STREAM] Processing message without session ID!");
+      state.sessionId = `temp-${Date.now()}`;
+    }
+    console.log(`🔄 [STREAM] Processing message for session: ${state.sessionId}`);
     state.memory.push(new HumanMessage(message));
     const preResponseState = await this._runWorkflowUntilResponse(state);
+    preResponseState.sessionId = state.sessionId;
     yield* this._generateResponseStream(preResponseState);
   }
 
   async _runWorkflowUntilResponse(state) {
     // Run extraction and tool selection
     const extracted = await this._extractSelectTool(state);
-    state = { ...state, params: { ...state.params, ...extracted.params } };
+    state = { ...state, sessionId: extracted.sessionId || state.sessionId, params: { ...state.params, ...extracted.params } };
 
     // Validate state availability
     // const validated = await this._validateStateAvailability(state);
@@ -384,6 +430,7 @@ async _extractSelectTool(state) {
     // Fetch data if state is valid and not off-topic
     if (!state.params.isOffTopic && !state.params.stateNotSupported) {
       const fetched = await this._fetchDataByTool(state);
+      state.sessionId = fetched.sessionId || state.sessionId;
       if (fetched.memory) state.memory = [...state.memory, ...fetched.memory];
       if (fetched.params) state.params = { ...state.params, ...fetched.params };
     }

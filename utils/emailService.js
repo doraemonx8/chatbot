@@ -3,14 +3,11 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-console.log("DEBUG: Email User is:", process.env.EMAIL_USER);
-console.log("DEBUG: Email Pass length:", process.env.EMAIL_PASS ? process.env.EMAIL_PASS.length : "0");
-
 const transporter = nodemailer.createTransport({
-    service: 'gmail', // Or your SMTP host
+    service: 'gmail',
     auth: {
         user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS // Use App Password if using Gmail
+        pass: process.env.EMAIL_PASS
     }
 });
 

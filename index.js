@@ -70,16 +70,12 @@ app.post('/api/chat/stream', authenticateToken, chatLimiter, async (req, res) =>
 
         console.log(`\n📩 [STREAM] Received message from ${sessionId}: ${message}`);
 
-        // Set SSE headers
         res.setHeader('Content-Type', 'text/event-stream');
         res.setHeader('Cache-Control', 'no-cache');
         res.setHeader('Connection', 'keep-alive');
         res.setHeader('X-Accel-Buffering', 'no'); // Disable Nginx buffering
 
-        // Get or create session
         const currentState = getOrCreateSession(sessionId, mode);
-        
-        // Validate session
         const validatedState = validateSession(currentState);
 
         // Send initial event
@@ -89,7 +85,6 @@ app.post('/api/chat/stream', authenticateToken, chatLimiter, async (req, res) =>
             memoryCount: validatedState.memory.length 
         })}\n\n`);
 
-        // Process with streaming
         const stream = await chatbot.processMessageStream(message, validatedState);
 
         for await (const chunk of stream) {
@@ -99,7 +94,6 @@ app.post('/api/chat/stream', authenticateToken, chatLimiter, async (req, res) =>
             })}\n\n`);
         }
 
-        // Get final state and validate
         const newState = await chatbot.getFinalState();
         
         // Verify session ID
@@ -115,7 +109,6 @@ app.post('/api/chat/stream', authenticateToken, chatLimiter, async (req, res) =>
 
         sessions[sessionId] = newState;
 
-        // Send completion event
         res.write(`data: ${JSON.stringify({ 
             type: 'done', 
             sessionId,

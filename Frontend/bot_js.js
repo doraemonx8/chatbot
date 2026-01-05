@@ -16,8 +16,7 @@ const manageVolume = (isShow) => {
         $$(".volume-pause").forEach(el => el.style.display = 'block')
         $$(".volume-play").forEach(el => el.style.display = 'none')  
     }
-   };
-
+};
 
 const md = window.markdownit({
     html: false,        
@@ -25,32 +24,55 @@ const md = window.markdownit({
     breaks: true  
 });
 
-
 let caseNumberFlag = 0;
 var selectedVoice;
 const synth = window.speechSynthesis;
 
+// Auth Token Management
+const AUTH_TOKEN_KEY = 'lexbot_auth_token';
+const AUTH_USER_KEY = 'lexbot_user_email';
+
+const getAuthToken = () => localStorage.getItem(AUTH_TOKEN_KEY);
+const setAuthToken = (token) => localStorage.setItem(AUTH_TOKEN_KEY, token);
+const removeAuthToken = () => {
+    localStorage.removeItem(AUTH_TOKEN_KEY);
+    localStorage.removeItem(AUTH_USER_KEY);
+};
+const getAuthUser = () => localStorage.getItem(AUTH_USER_KEY);
+const setAuthUser = (email) => localStorage.setItem(AUTH_USER_KEY, email);
+
+// Check if user is authenticated
+const isAuthenticated = () => !!getAuthToken();
+
+// Backend URL Configuration
+// const API_BASE_URL = window.location.hostname === 'localhost' 
+//     ? 'http://localhost:3000' 
+//     : 'https://ai.nextclm.in/cb';
+
+const API_BASE_URL = "http://localhost:3000"; //local testing
+
 // Handle window refresh or close event
 window.addEventListener("beforeunload", function() {
-    synth.cancel(); // Stop any ongoing speech synthesis
+    synth.cancel();
 });
 
-// Handle document readiness and conditions for displaying elements
 document.addEventListener("DOMContentLoaded", function() {
     if (caseNumberFlag !== 0) {
         document.querySelector(".suggestions").style.display = "none";
-        console.log(caseNumberFlag, "+--==");
+    }
+    
+    // Check authentication on page load
+    if (!isAuthenticated()) {
+        showLoginModal();
     }
 });
 
-// Handles changes in the available voices
 synth.onvoiceschanged = function () {
   let voices = synth.getVoices();
   voices.forEach(function (voice) {
     if (voice.name == "Microsoft Heera - English (India)") {
       selectedVoice = voice;
     } else {
-      
       if (voice.name == "Lekha") {
         selectedVoice = voice;
       }
@@ -59,7 +81,7 @@ synth.onvoiceschanged = function () {
 };
 
 let currentlySpeaking = false;
-let paused = false; // New variable to track toggle state
+let paused = false;
 
 function speakText(text) {
     if (!synth) {
@@ -67,42 +89,34 @@ function speakText(text) {
         return;
     }
 
-    // Toggle logic — if speaking and not paused, stop it
     if (currentlySpeaking && !paused) {
-        console.log("Speech is ongoing. Stopping now.");
         synth.cancel();
         currentlySpeaking = false;
-        paused = true; // Mark as paused/toggled off
-       manageVolume(true);
+        paused = true;
+        manageVolume(true);
         return;
     }
 
-    // If paused and user clicks again — start speech again
     if (paused) {
-        console.log("Restarting speech after pause.");
-        paused = false; // Reset pause flag
+        paused = false;
     }
 
     let utterance = new SpeechSynthesisUtterance(text);
     if (selectedVoice) {
         utterance.voice = selectedVoice;
-        console.log(selectedVoice, "selectedVoice");
     }
 
     utterance.onend = function(e) {
-        console.log("Finished speaking in " + e.elapsedTime + " seconds.");
-        console.log("Speech finished");
         currentlySpeaking = false;
-        paused = false; // Reset paused on completion
+        paused = false;
         manageVolume(true);
     };
 
     utterance.onerror = function(e) {
         currentlySpeaking = false;
-        paused = false; // Reset paused on error
+        paused = false;
         console.error("Speech synthesis error:", e);
         if (currentlySpeaking) {
-            console.log("Currently Speaking. Cancelling previous utterance");
             synth.cancel();
             manageVolume(false);
         } else {
@@ -120,10 +134,9 @@ function speakText(text) {
     synth.speak(utterance);
 }
 
-
-
+// Speech Recognition
 const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
-recognition.lang = "en-IN"; // Set to "en-US" or "en-IN" as per your preference
+recognition.lang = "en-IN";
 recognition.continuous = false;
 recognition.interimResults = false;
 
@@ -139,7 +152,7 @@ speechBtn.addEventListener("click", () => {
     isListening = false;
   } else {
     recognition.start();
-    speechBtn.classList.add("listening"); // show active mic
+    speechBtn.classList.add("listening");
     isListening = true;
   }
 });
@@ -148,7 +161,6 @@ recognition.onresult = (event) => {
   const transcript = event.results[0][0].transcript;
   console.log("Voice Input:", transcript);
   searchBox.value = transcript;
-//   chatSend(transcript); // Automatically send as message
 };
 
 recognition.onerror = (event) => {
@@ -161,94 +173,19 @@ recognition.onend = () => {
   speechBtn.classList.remove("listening");
 };
 
-
-// function speakText(text) {
-//     if (!synth) {
-//         alert("Text to speech not supported");
-//         return;
-//     }
-//     if (currentlySpeaking) {
-//         console.log("Currently Speaking. Cancelling previous utterance");
-//         synth.stop();
-//     }
-
-//     let utterance = new SpeechSynthesisUtterance(text);
-//     if (selectedVoice) {
-//         utterance.voice = selectedVoice;
-//         console.log(selectedVoice, "selectedVoice");
-//     }
-
-//     utterance.onend = function(e) {
-//         console.log("Finished speaking in " + e.elapsedTime + " seconds.");
-//         console.log("Speech finished");
-//         currentlySpeaking = false;
-//         manageVolume(true);
-       
-//     };
-
-//     utterance.onerror = function(e) {
-//         currentlySpeaking = false;
-//         console.error("Speech synthesis error:", e);
-//         if (currentlySpeaking) {
-//             console.log("Currently Speaking. Cancelling previous utterance");
-//             synth.cancel();
-//             manageVolume(false);
-//         } else {
-//            manageVolume(true);
-//         }
-//     };
-
-//     if (selectedVoice == "Microsoft Heera - English (India)") {
-//         utterance.rate = 1.3;
-//     } else {
-//         utterance.rate = 1.25;
-//     }
-
-//     currentlySpeaking = true;
-    
-//     synth.speak(utterance);
-// }
-
 document.getElementById("fab").addEventListener("click", function() {
-    document.getElementById("cb").style.display = "block"; // Equivalent to jQuery's fadeIn()
+    if (!isAuthenticated()) {
+        showLoginModal();
+        return;
+    }
+    
+    document.getElementById("cb").style.display = "block";
     document.getElementById("cb").style.opacity = 1;
     setOpenStatus(1);
-
-    // document.getElementById("chatContainer").addEventListener("click", function (event) {
-    //         console.log("Chat Container",event.target);
-            
-    //         if (event.target.classList.contains("speaker")) {
-    //             let msgText = event.target.closest(".msg");
-    //             let spanContent = msgText.querySelector("span").innerHTML;
-    //             msgText.querySelector("span").innerHTML = ""; // Remove span contents
-
-    //             let res = msgText.textContent.trim();
-    //             let updatedMessage = res.replace(
-    //                 /[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F700}-\u{1F77F}\u{1F780}-\u{1F7FF}\u{1F800}-\u{1F8FF}\u{1F900}-\u{1F9FF}\u{1FA00}-\u{1FA6F}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu,
-    //                 ""
-    //             );
-    //             msgText.querySelector("span").innerHTML = spanContent; // Restore the span contents
-    //             console.log(res);
-
-    //             const play = event.target.querySelector(".play");
-    //             const pause = event.target.querySelector(".pause");
-
-    //             if (synth.speaking) {
-    //                 synth.cancel();
-    //                 pause.style.display = "none";
-    //                 play.style.display = "block";
-    //             } else {
-    //                 speakText(updatedMessage);
-    //                 pause.style.display = "block";
-    //                 play.style.display = "none";
-    //             }
-    //         }
-    //     });
 });
 
 document.addEventListener("DOMContentLoaded", function() {
     document.getElementById("chatContainer").addEventListener("click", function (event) {
-        console.log("Chat Container", event.target);
         const trg = event.target;
         if (trg.classList.contains("volume")) {
             let res = trg.parentElement.innerText.trim();
@@ -256,20 +193,7 @@ document.addEventListener("DOMContentLoaded", function() {
                 /[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F700}-\u{1F77F}\u{1F780}-\u{1F7FF}\u{1F800}-\u{1F8FF}\u{1F900}-\u{1F9FF}\u{1FA00}-\u{1FA6F}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu,
                 ""
             );
-            console.log(updatedMessage);
 
-            // if (synth.speaking) {
-            //     synth.cancel();
-            //     trg.previousSibling.style.display = "none";
-            //     trg.style.display = "block";
-            // } else {
-            //     speakText(updatedMessage);
-            //     console.log(trg.nextSibling);
-            //     trg.nextSibling.style.display = "block";
-            //     trg.style.display = "none";
-            // }
-
-        
             const playBtn = trg.parentElement.querySelector('.volume-play');
             const pauseBtn = trg.parentElement.querySelector('.volume-pause');
 
@@ -280,22 +204,22 @@ document.addEventListener("DOMContentLoaded", function() {
             setTimeout(() => { 
                 pauseBtn.style.display = 'block';
                 playBtn.style.display = 'none';
-            },100);
+            }, 100);
             
             speakText(updatedMessage);
         }
-        });
+    });
 });
 
 document.getElementById("cl").addEventListener("click", function() {
     const cb = document.getElementById("cb");
-    cb.style.opacity = 1; // Ensure it's visible to start fade out
+    cb.style.opacity = 1;
     const fadeEffect = setInterval(function() {
         if (cb.style.opacity > 0) {
             cb.style.opacity -= 0.1;
         } else {
             clearInterval(fadeEffect);
-            cb.style.display = "none"; // Hide after fade out
+            cb.style.display = "none";
         }
     }, 50);
 
@@ -306,37 +230,27 @@ document.getElementById("cl").addEventListener("click", function() {
     synth.cancel();
 
     const chatContainer = document.getElementById("chatContainer");
-    chatContainer.innerHTML = ""; // Clear the chat container
-
-    // Create and append new chat messages to the container
-    chatContainer.innerHTML += `
+    chatContainer.innerHTML = `
       <div class="chat" style="display: flex;">
         <div class="chat-img"><img src="https://cybernauts.online/haqam/assets/images/bot2.png"></div>
         <div class="msg">
-        <p class="speaker"><img src="./volume.svg"><img style="display: none;" src="./volume-off.svg"></p>Hello!</div>
+        <p class="speaker"><img src="./volume.svg" class="volume volume-play"><img style="display: none;" src="./volume-off.svg" class="volume volume-pause"></p>Hello!</div>
       </div>
       <div class="chat" style="display: flex;">
         <div class="chat-img"><img src="https://cybernauts.online/haqam/assets/images/bot2.png"></div>
-        <div class="msg"><p class="speaker"><img src="./volume.svg"><img style="display: none;" src="./volume-off.svg"></p> I am LexBot.</div>
+        <div class="msg"><p class="speaker"><img src="./volume.svg" class="volume volume-play"><img style="display: none;" src="./volume-off.svg" class="volume volume-pause"></p> I am LexBot.</div>
       </div>
     `;
-    // chatContainer.appendChild(chatBubble.cloneNode(true));  // Clone and append the chat bubble
-    document
-        .querySelectorAll(".chat-bubble")
-        .forEach((bubble) => bubble.remove()); // Remove extra chat bubbles if any
+    
+    document.querySelectorAll(".chat-bubble").forEach((bubble) => bubble.remove());
     setOpenStatus(0);
 });
 
 function setChatData(from, message, time) {
     try {
-        // Retrieve the existing chat data or initialize it if not present
         const existingData = sessionStorage.getItem("chatData");
         const data = existingData ? JSON.parse(existingData) : [];
-
-        // Push the new chat message to the array
         data.push({ from, message, time });
-
-        // Save the updated array back to sessionStorage
         sessionStorage.setItem("chatData", JSON.stringify(data));
     } catch (error) {
         console.error("Error saving chat data to sessionStorage:", error);
@@ -358,42 +272,12 @@ function formatAMPM() {
     const ampm = hours >= 12 ? "PM" : "AM";
 
     hours = hours % 12;
-    hours = hours ? hours : 12; // the hour '0' should be '12'
+    hours = hours ? hours : 12;
     const minutesPadded = minutes < 10 ? `0${minutes}` : minutes;
 
     const strTime = `${hours}:${minutesPadded} ${ampm}`;
     return strTime;
 }
-
-const anchorify = (text) => {
-    // Regex to match fully qualified URLs
-    const fullUrlRegex =
-        /(\b(https?|ftp|file):\/\/[-A-Z0-9+&@#\/%?=~_|!:,.;]*[-A-Z0-9+&@#\/%=~_|])/gi;
-    const textWithLinks = text.replace(
-        fullUrlRegex,
-        "<a href='$1' target='_blank'>$1</a>"
-    );
-
-    // Regex to match "www." links without protocols
-    const wwwRegex = /(^|[^\/])(www\.[\S]+(\b|$))/gim;
-    return textWithLinks.replace(
-        wwwRegex,
-        '$1<a target="_blank" href="http://$2">$2</a>'
-    );
-};
-
-const removeLink = (text) => {
-    // Regular expression to match URLs
-    const urlRegex =
-        /(\b(https?|ftp|file):\/\/[-A-Z0-9+&@#\/%?=~_|!:,.;]*[-A-Z0-9+&@#\/%=~_|])/gi;
-
-    // Optional: Log matched URLs for debugging
-    const matchedUrls = text.match(urlRegex);
-    console.log("Matched URLs:", matchedUrls ? matchedUrls.join(", ") : "None");
-
-    // Replace found URLs with an empty string
-    return text.replace(urlRegex, "");
-};
 
 const chatBubble = `<div class="chat d-flex chat-bubble"><div class="chat-img"><img src="https://cybernauts.online/haqam/assets/images/bot2.png"></div><div class="chat-bubble msg">
 <div class="typing">
@@ -405,7 +289,6 @@ const chatBubble = `<div class="chat d-flex chat-bubble"><div class="chat-img"><
 </div>`;
 
 document.addEventListener("DOMContentLoaded", function() {
-    // Append initial chat messages and bubbles
     const chatContainer = document.getElementById("chatContainer");
     chatContainer.innerHTML += `
         <div class="chat" style="display: flex;">
@@ -423,18 +306,16 @@ document.addEventListener("DOMContentLoaded", function() {
         ${chatBubble}
     `;
 
-    // Remove chat bubble after 1 second
     setTimeout(() => {
         const bubbles = document.querySelectorAll(".chat-bubble");
         bubbles.forEach((bubble) => bubble.remove());
     }, 1000);
 
-    // Manage chat display based on session status
     const openStatus = sessionStorage.getItem("openStatus");
     const cb = document.getElementById("cb");
     const fab = document.getElementById("fab");
 
-    if (openStatus === "1") {
+    if (openStatus === "1" && isAuthenticated()) {
         cb.style.display = "block";
         fab.style.display = "none";
     } else {
@@ -442,169 +323,23 @@ document.addEventListener("DOMContentLoaded", function() {
         fab.style.display = "block";
     }
 
-    // Handle historical chat data
     const contextData = sessionStorage.getItem("context");
     if (contextData) {
         const data = JSON.parse(contextData);
-        console.log("Data:", data);
-
-        // data.forEach((entry) => {
-        //     if (!entry.isBot) {
-        //         userResponse(entry.message, 0);
-        //     } else {
-        //         apiResponse(entry.message, 0);
-        //     }
-        // });
-
         data.forEach(({ isBot, message }) => {
             if (!isBot) return userResponse(message, 0);
 
             let val = message;
-            // Attempt to parse only if it's a string
             if (typeof val === 'string') try { val = JSON.parse(val); } catch {}
 
-            // Use the parsed object if valid, otherwise wrap the original message safely
             apiResponse(val?.response ? val : { response: message, memory: [], params: {} }, 0);
         });
-        // Scroll to the bottom of the chat container
         chatContainer.scrollTop = chatContainer.scrollHeight;
     } else {
         sessionStorage.setItem("context", "[]");
         sessionStorage.setItem("openStatus", "0");
     }
 });
-
-// function userResponse(message, via) {
-//     const chatContainer = document.getElementById('chatContainer');
-//     chatContainer.innerHTML += `<div class="user-chat"><p class='user-msg'>${message}</p></div>`;
-//     if (via !== 0) {
-//         contextMessage(message, 2);
-//     }
-// }
-
-// function apiResponse(message, via) {
-//     const chatContainer = document.getElementById('chatContainer');
-//     chatContainer.innerHTML += `<div class="chat"><p class='msg'>${message}</p></div>`;
-//     if (via !== 0) {
-//         contextMessage(message, 1);
-//     }
-// }
-
-// function contextMessage(msg, type) {
-//     let context = sessionStorage.getItem('context');
-//     context = context ? JSON.parse(context) : [];
-//     context.push({ message: msg, type });
-//     sessionStorage.setItem('context', JSON.stringify(context));
-// }
-
-document.addEventListener("DOMContentLoaded", function() {
-    const sendButton = document.getElementById("sendButton");
-    const searchBox = document.getElementById("searchBox");
-
-    sendButton.addEventListener("click", function() {
-        if (searchBox.value.trim() !== "") {
-            chatSend();
-        }
-    });
-});
-
-document.addEventListener("DOMContentLoaded", function() {
-    const searchBox = document.getElementById("searchBox");
-
-    searchBox.addEventListener("keypress", function(event) {
-        if (event.key === "Enter") {
-            if (searchBox.value.trim() !== "") {
-                chatSend();
-                event.preventDefault();
-            }
-        }
-    });
-});
-
-document.addEventListener("DOMContentLoaded", function() {
-    const searchBox = document.getElementById("searchBox");
-    searchBox.disabled = false; // This enables the input box if it was previously disabled
-});
-
-
-function getCitations(data, scope, state) {
-    const actIds = new Set();
-    const actIdToNameMap = {};
-    const actIdToComplianceIdMap = {};
-
-    data.forEach(obj => {
-        const actId = obj.act_id || obj.actId;
-
-        if(scope.toLowerCase()==="central" || (state && obj.state.toLowerCase()===state.toLowerCase())){ //so that to ensure citation opens up correct act only (based on scope & state)
-            
-            actIds.add(actId);
-        }
-
-        actIdToNameMap[actId] = obj.actName;
-
-        if (obj.complianceId) {
-            if (!actIdToComplianceIdMap[actId]) {
-                actIdToComplianceIdMap[actId] = [];
-            }
-            actIdToComplianceIdMap[actId].push(obj.complianceId);
-        }
-    });
-
-    let html = '<div>';
-    Array.from(actIds).forEach((actId, index) => {
-        const name = actIdToNameMap[actId];
-        const complianceIds = actIdToComplianceIdMap[actId];
-        const complianceText = complianceIds ? complianceIds.join(" ,") : (index + 1);
-
-        html += `<a style="margin-left:3px;" target="_blank" href="https://lexbuddy.com/lexbuddylibrary/lexbuddydetails?adv_search=&scope=${scope}&state=${state || ""}&multi_state=&laws=&key_checkbox=&act_list_name=${encodeURIComponent(name)}&act_list=${actId}&Next=Submit">ref - ${complianceText}</a>`;
-    });
-    html += '</div>';
-
-    return html;
-}
-
-
-// function chatSend(msg = "", id = "", type = "") {
-//     // caseNumberFlag++;
-
-//     const searchBox = document.getElementById("searchBox");
-//     const searchButton = document.getElementById("sendButton");
-//     searchBox.disabled = true;
-//     searchButton.disabled = true;
-
-//     let chatVal = searchBox.value.trim() !== "" ? searchBox.value.trim() : msg;
-
-//     // Display user chat
-//     userResponse(chatVal);
-//     fetch(`https://ai.nextclm.in/${window.location.pathname.includes("lexChat2") ? "cb1" :"cb"}/api/chat`, {
-//             method: "POST",
-//             headers: {
-//                 "Content-Type": "application/json",
-//             },
-//             body: JSON.stringify({
-//                 message: chatVal,
-//                 state: sessionStorage.getItem("state"),
-//                 actId: type === "act" ? id : null,
-//                 complianceId: type === "compliance" ? id : null
-//             }),
-//         })
-//         .then((response) => response.json())
-//         .then((data) => {
-//             document.querySelector(".chat-bubble").remove();
-//             searchBox.disabled = false;
-//             searchButton.disabled = false;
-
-//             console.log("data from api =>",data);
-//             // Populate chat response
-//             apiResponse(data);
-//             document.querySelector("#searchBox").focus();
-
-//         })
-//         .catch((error) => {
-//             console.error("Error:", error);
-//             alert("Upload Failed");
-//         });
-// }
 
 // Helper to manage Session ID
 function getSessionId() {
@@ -619,87 +354,13 @@ function getSessionId() {
     return sessionId;
 }
 
-//chat
-
-// function chatSend(msg = "") {
-//     const searchBox = document.getElementById("searchBox");
-//     const searchButton = document.getElementById("sendButton");
-//     const modeSelector = document.getElementById("modeSelector"); 
-    
-//     searchBox.disabled = true;
-//     searchButton.disabled = true;
-
-//     let chatVal = searchBox.value.trim() !== "" ? searchBox.value.trim() : msg;
-//     if (!chatVal) {
-//         searchBox.disabled = false;
-//         searchButton.disabled = false;
-//         return;
-//     }
-
-//     // Display user message
-//     userResponse(chatVal);
-
-//     // Prepare Payload
-//     const payload = {
-//         message: chatVal,
-//         sessionId: getSessionId(),
-//         mode: modeSelector.value 
-//     };
-
-//     fetch(`https://ai.nextclm.in/${window.location.pathname.includes("lexChat2") ? "cb1" :"cb"}/api/chat`, { 
-//             method: "POST",
-//             headers: {
-//                 "Content-Type": "application/json",
-//             },
-//             body: JSON.stringify(payload),
-//         })
-//         .then((response) => {
-//             if (!response.ok) {
-//                 throw new Error(`Server Error: ${response.statusText}`);
-//             }
-//             return response.json();
-//         })
-//         .then((data) => {
-//             // Remove loading bubble
-//             const loadingBubble = document.querySelector(".chat-bubble");
-//             if(loadingBubble) loadingBubble.remove();
-            
-//             searchBox.disabled = false;
-//             searchButton.disabled = false;
-
-//             console.log("Backend Response:", data);
-
-//             // backend returns { response: "...", sessionId: "..." }
-//             if (data.response) {
-//                 const formattedData = {
-//                     response: data.response,
-//                     memory: [], // Add dummy memory if your frontend logic relies on it
-//                     params: { mode: payload.mode }
-//                 };
-//                 apiResponse(formattedData);
-//             } else {
-//                 console.error("Unexpected response format");
-//             }
-
-//             document.querySelector("#searchBox").focus();
-//         })
-//         .catch((error) => {
-//             console.error("Error:", error);
-//             const loadingBubble = document.querySelector(".chat-bubble");
-//             if(loadingBubble) loadingBubble.remove();
-            
-//             searchBox.disabled = false;
-//             searchButton.disabled = false;
-            
-//             // Show error in chat
-//             const chatContainer = document.getElementById("chatContainer");
-//             chatContainer.innerHTML += `<div class="chat"><div class="msg" style="color:red">Error: Could not connect to server. Ensure backend is running on port 3000.</div></div>`;
-//         });
-// }
-
-//chat/stream
-
+// Streaming Chat Function
 async function chatSend(msg = "") {
+    if (!isAuthenticated()) {
+        showLoginModal();
+        return;
+    }
+
     const searchBox = document.getElementById("searchBox");
     const searchButton = document.getElementById("sendButton");
     const modeSelector = document.getElementById("modeSelector");
@@ -715,8 +376,6 @@ async function chatSend(msg = "") {
         return;
     }
 
-    // contextMessage(chatVal, 2); // 2 = user
-
     userResponse(chatVal);
 
     const payload = {
@@ -725,16 +384,27 @@ async function chatSend(msg = "") {
         mode: modeSelector.value
     };
 
-    // const baseUrl = `https://ai.nextclm.in/${window.location.pathname.includes("lexChat2") ? "cb1" : "cb"}`;
-    // const streamUrl = `${baseUrl}/api/chat/stream`;
-    const streamUrl = "http://localhost:3000/api/chat/stream"
+    const streamUrl = `${API_BASE_URL}/api/chat/stream`;
 
     try {
         const response = await fetch(streamUrl, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: { 
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${getAuthToken()}`
+            },
             body: JSON.stringify(payload),
         });
+
+        if (response.status === 401 || response.status === 403) {
+            removeAuthToken();
+            showLoginModal();
+            return;
+        }
+
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
 
         const loadingBubble = document.querySelector(".chat-bubble");
         if (loadingBubble) loadingBubble.remove();
@@ -771,17 +441,14 @@ async function chatSend(msg = "") {
             const chunk = decoder.decode(value, { stream: true });
             buffer += chunk;
 
-            // SSE events are separated by double newline \n\n
             const lines = buffer.split("\n\n");
-            
-            // Keep the last partial line in the buffer
             buffer = lines.pop() || ""; 
 
             for (const line of lines) {
-                if (!line.trim()) continue; // Skip empty lines
+                if (!line.trim()) continue;
                 
                 if (line.startsWith("data: ")) {
-                    const jsonStr = line.substring(6).trim(); // Remove "data: " prefix
+                    const jsonStr = line.substring(6).trim();
                     if (jsonStr === "[DONE]") break;
 
                     try {
@@ -789,14 +456,11 @@ async function chatSend(msg = "") {
 
                         if (data.type === "token") {
                             accumulatedText += data.content;
-                            
                             msgSpan.innerHTML = marked.parse(accumulatedText);
                             chatContainer.scrollTop = chatContainer.scrollHeight;
 
                         } else if (data.type === "done") {
                             if (cursorSpan) cursorSpan.remove();
-
-                            // contextMessage(accumulatedText, 1); // 1 = bot
 
                             searchBox.disabled = false;
                             searchButton.disabled = false;
@@ -814,6 +478,8 @@ async function chatSend(msg = "") {
                                 memory: [],
                                 params: completeResponseObj.params,
                             }));
+                        } else if (data.type === "error") {
+                            throw new Error(data.message || "Unknown streaming error");
                         }
                     } catch (e) {
                         console.error("Error parsing stream JSON:", e, "Line:", jsonStr);
@@ -828,7 +494,7 @@ async function chatSend(msg = "") {
         const cursorSpan = document.querySelector(".cursor-blink");
         if (cursorSpan) cursorSpan.remove();
 
-        chatContainer.innerHTML += `<div class="chat"><div class="msg" style="color:red">Connection interrupted. Please try again.</div></div>`;
+        chatContainer.innerHTML += `<div class="chat"><div class="msg" style="color:red">Connection interrupted. Please try again. ${error.message}</div></div>`;
         searchBox.disabled = false;
         searchButton.disabled = false;
     }
@@ -838,28 +504,16 @@ const userResponse = (chatVal, via = "") => {
     const searchBox = document.getElementById("searchBox");
     const chatContainer = document.getElementById("chatContainer");
 
-    // Clear the search box input
     searchBox.value = "";
 
-    console.log(chatVal);
-
-    // Create a new div element for user chat
     const userChatDiv = document.createElement("div");
     userChatDiv.className = "user-chat";
     userChatDiv.innerHTML = `<p class='user-msg'>${chatVal}</p>`;
 
-    // Append the new chat to the chat container
     chatContainer.appendChild(userChatDiv);
-
-    // Append the chat bubble for visual effect
     chatContainer.insertAdjacentHTML("beforeend", chatBubble);
-
-    // Scroll to the bottom of the chat container
     chatContainer.scrollTop = chatContainer.scrollHeight;
 
-    console.log("Respvia:", via);
-
-    // Optionally, handle additional logic based on 'via' parameter
     if (via !== 0) {
         contextMessage(chatVal, 2);
     }
@@ -867,16 +521,12 @@ const userResponse = (chatVal, via = "") => {
 
 const apiResponse = (chatResponse, via) => {
     const chatContainer = document.getElementById("chatContainer");
-
-    // console.log("chat response =>", chatResponse);
     const responseBot = chatResponse.response;
 
-    console.log("response =>", responseBot);
     if (via !== 0) {
         contextMessage(chatResponse, 1);
     }
 
-    //storing state
     sessionStorage.setItem(
         "state",
         JSON.stringify({
@@ -885,206 +535,43 @@ const apiResponse = (chatResponse, via) => {
         })
     );
 
-
-
     const answerDiv = formatText(responseBot);
     let chatDiv = `<div class="chat" style="display: flex;">
         <div class="chat-img"><img src="https://cybernauts.online/haqam/assets/images/bot2.png" alt="Bot Image"></div>
         <div class="msg"><p class="speaker"><img src="./volume.svg" class="volume volume-play"/><img style="display: none;" class="volume volume-pause" src="./volume-off.svg"/>
-        
-        ${answerDiv}.
-        ${chatResponse.params.scopes && chatResponse.params.scopes.length <=1 && !chatResponse.params.isOffTopic ? getCitations(chatResponse.params.data,chatResponse.params.geographyType || "central",chatResponse.params.state) :""}
-    </p>
-    `;
+        ${answerDiv}
+    </p></div></div>`;
 
-    chatDiv += `</div></div>`;
     chatContainer.insertAdjacentHTML("beforeend", chatDiv);
-
     chatContainer.scrollTop = chatContainer.scrollHeight;
-    //checking if multiple acts/compliances are to be chosen
-    if (chatResponse.params.requestType === "list_request" && chatResponse.params.tool.dataType==="act" && chatResponse.params.data.length > 1) {
-        
-        const totalActs = chatResponse.params.data;
-        let dataOffset = 0;
-        const maxPerPage = 4;
-
-        const container = document.querySelector("#stepZeroSuggestions");
-
-        const renderActs = () => {
-            let html = "";
-
-            const end = Math.min(dataOffset + maxPerPage, totalActs.length);
-            for (let i = dataOffset; i < end; i++) {
-                const act = totalActs[i];
-                html += `
-          <div class='suggestion-div'>
-            <button class="genral-details" data-type="act" data-value="${btoa(act.actId)}">${act.name}</button>
-          </div>`;
-            }
-
-            if(dataOffset == 0){
-                html += `<a class="initial-state-suggestion-viewmore " data-value="viewMore">View more</a>`
-                container.innerHTML=html;
-            }else{
-                container.innerHTML+=html;
-            }
-            
-            dataOffset = end;
-
-            
-
-            // Show or hide the view more button
-            if (dataOffset >= totalActs.length) {
-                document.querySelector(".initial-state-suggestion-viewmore").style.display="none";
-            } else {
-                document.querySelector(".initial-state-suggestion-viewmore").style.display="block";
-            }
-        };
-
-        renderActs();
-
-        container.style.display = "flex";
-        document.querySelector("#selectionType").textContent = "Act";
-        document.querySelector("#draggable").click();
-
-        document.querySelector(".initial-state-suggestion-viewmore").addEventListener("click", () => {
-            renderActs();
-        });
-
-
-        document.querySelector("#stepZeroSuggestions").addEventListener("click", botOptionsClick);
-
-
-        return;
-    } else if (chatResponse.params.requestType === "list_request" && chatResponse.params.tool.dataType==="compliance" && chatResponse.params.data.length > 1) {
-
-
-        const totalCompliances = chatResponse.params.data;
-        let dataOffset = 0;
-        const maxPerPage = 4;
-
-        const container = document.querySelector("#stepZeroSuggestions");
-
-        const renderCompliances = () => {
-            let html = "";
-
-            const end = Math.min(dataOffset + maxPerPage, totalCompliances.length);
-            for (let i = dataOffset; i < end; i++) {
-                const compliance = totalCompliances[i];
-                html += `
-            <div class='suggestion-div'>
-              <button class="genral-details" data-type="compliance" data-value="${btoa(compliance.complianceId)}">${compliance.application.slice(0,40)}...</button>
-            </div>`;
-            }
-
-            if(dataOffset == 0){
-                html += `<a class="initial-state-suggestion-viewmore " data-value="viewMore">View more</a>`
-                container.innerHTML=html;
-            }else{
-                container.innerHTML+=html;
-            }
-            dataOffset = end;
-
-             // Show or hide the view more button
-             if (dataOffset >= totalCompliances.length) {
-                document.querySelector(".initial-state-suggestion-viewmore").style.display="none";
-            } else {
-                document.querySelector(".initial-state-suggestion-viewmore").style.display="block";
-            }
-
-          
-        };
-
-
-        renderCompliances();
-
-        container.style.display = "flex";
-        document.querySelector("#selectionType").textContent = "Compliance";
-        document.querySelector("#draggable").click();
-
-        document.querySelector(".initial-state-suggestion-viewmore").addEventListener("click", () => {
-            renderCompliances();
-        });
-
-
-        document.querySelector("#stepZeroSuggestions").addEventListener("click", botOptionsClick);
-
-        return;
-
-
-    }
-   
 };
-
-const isValidURL = (url) => {
-    const pattern = new RegExp(
-        "^(https?:\\/\\/)?" + // protocol
-        "((([a-z\\d]([a-z\\d-]*[a-z\\d])*)\\.?)+[a-z]{2,}|" + // domain name and extension
-        "((\\d{1,3}\\.){3}\\d{1,3}))" + // OR ip (v4) address
-        "(\\:\\d+)?(\\/[-a-z\\d%_.~+]*)*" + // port and path
-        "(\\?[;&a-z\\d%_.~+=-]*)?" + // query string
-        "(\\#[-a-z\\d_]*)?$",
-        "i"
-    ); // fragment locator
-    return !!pattern.test(url) && url !== null && url !== "N/A" && url !== "";
-};
-
-// const formatText = (input) => {
-//     return input
-//         .replace(/\n/g, "<br>") // Replace newlines with <br>
-//         .replace(/###(.*?)###/g, "<em>$1</em>") // Replace ###text### with <em>text</em>
-//         .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>") // Replace **text** with <strong>text</strong>
-// };
 
 const formatText = (input) => {
     return md.render(input);
 };
 
-
 document.addEventListener("DOMContentLoaded", function() {
-    // Get all elements with specified IDs and convert NodeList to array for easier handling.
-    const suggestions = ["#suggestion-1", "#suggestion-2", "#suggestion-3"].map(
-        (id) => document.querySelector(id)
-    );
+    const sendButton = document.getElementById("sendButton");
+    const searchBox = document.getElementById("searchBox");
 
-    // Add click event listeners to each suggestion element.
-    suggestions.forEach(function(suggestion) {
-        suggestion.addEventListener("click", function() {
-            // Hide all elements with the 'suggestions' class.
-            document.querySelectorAll(".suggestions").forEach(function(el) {
-                el.style.display = "none";
-            });
-
-            // Retrieve the text within the <h5> element of the clicked suggestion.
-            let text = this.querySelector("h5").textContent;
-
-            // Send the retrieved text to the chat handling function.
-            chatSend(text);
-        });
+    sendButton.addEventListener("click", function() {
+        if (searchBox.value.trim() !== "") {
+            chatSend();
+        }
     });
+
+    searchBox.addEventListener("keypress", function(event) {
+        if (event.key === "Enter") {
+            if (searchBox.value.trim() !== "") {
+                chatSend();
+                event.preventDefault();
+            }
+        }
+    });
+
+    searchBox.disabled = false;
 });
 
-// const contextMessage = (msg, via) => {
-//     // Retrieve the 'context' from sessionStorage, or initialize it as an empty array if it doesn't exist
-//     let existingContext = JSON.parse(sessionStorage.getItem("context")) || [];
-
-//     // Determine if the message is from the bot based on the 'via' parameter
-//     let isBot = via === 1;
-
-//     // Create the new message object
-//     let newMessage = {
-//         message: msg,
-//         isBot: isBot,
-//     };
-
-//     // Push the new message to the context array
-//     existingContext.push(newMessage);
-
-//     // Update the 'context' in sessionStorage with the modified array
-//     sessionStorage.setItem("context", JSON.stringify(existingContext));
-// };
-
-// Save message to frontend context
 const contextMessage = (msg, via) => {
     try {
         let existingContext = JSON.parse(sessionStorage.getItem("context")) || [];
@@ -1111,78 +598,21 @@ const contextMessage = (msg, via) => {
         }
 
         sessionStorage.setItem("context", JSON.stringify(existingContext));
-        
-        // Now valid because messageText is guaranteed to be a string
-        console.log(`💾 Saved to UI context: ${isBot ? 'Bot' : 'User'} message (${messageText.substring(0, 30)}...)`);
+        console.log(`💾 Saved to UI context: ${isBot ? 'Bot' : 'User'} message`);
     } catch (e) {
         console.error("❌ Failed to save context:", e);
     }
 };
 
-document.querySelector("#draggable").addEventListener("click", function() {
-    const bottomSheet = document.querySelector(".submit-chat");
-    const chatContainer = document.getElementById("chatContainer");
-
-    if (!bottomSheet.classList.contains("open")) {
-        chatContainer.classList.remove("opened");
-    }
-
-    if (bottomSheet.classList.contains("slide-top")) {
-        bottomSheet.classList.remove("slide-top");
-        bottomSheet.classList.add("slide-bottom");
-        bottomSheet.classList.remove("open");
-        chatContainer.classList.remove("opened");
-    } else {
-        bottomSheet.classList.add("slide-top");
-        bottomSheet.classList.remove("slide-bottom");
-        bottomSheet.classList.add("open");
-        chatContainer.classList.add("opened");
-    }
-
-    chatContainer.scrollTop = chatContainer.scrollHeight;
-});
-
-
-
-const botOptionsClick = async (e) => {
-
-    try {
-
-        if (e.target && e.target.classList.contains("genral-details")) {
-            const id = atob(e.target.getAttribute("data-value"));
-            const type = e.target.getAttribute("data-type");
-            const name = e.target.textContent.trim();
-
-            console.log("id =>", id);
-            document.querySelectorAll(".genral-details").forEach((button) => {
-                // button.style.display = "none";
-            });
-
-
-            const container = document.querySelector("#stepZeroSuggestions");
-            container.style.display = "none";
-            document.querySelector("#draggable").click();
-
-            chatSend(`I want to know more about ${name}`, id, type);
-        }
-
-    } catch (err) {
-
-        console.error("act click error : ", err);
-    }
-}
-
-//session reset 
+// Session reset 
 function clearChatSession() {
     try {
         const sessionId = sessionStorage.getItem("chatSessionId");
         
-        // Clear frontend storage
         sessionStorage.removeItem("context");
         sessionStorage.removeItem("chatSessionId");
         sessionStorage.removeItem("openStatus");
         
-        // Clear UI
         const chatContainer = document.getElementById("chatContainer");
         chatContainer.innerHTML = `
             <div class="chat" style="display: flex;">
@@ -1208,15 +638,151 @@ function clearChatSession() {
         `;
         
         console.log("✅ Frontend session cleared");
-        console.log(`⚠️ Backend session '${sessionId}' will remain until server restart`);
-        console.log("💡 New session will be created on next message");
-        
     } catch (e) {
         console.error("❌ Failed to clear session:", e);
     }
 }
 window.clearChatSession = clearChatSession;
 
+// === AUTHENTICATION FUNCTIONS ===
+
+function showLoginModal() {
+    const modalHtml = `
+        <div id="authModal" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; z-index: 10000;">
+            <div style="background: white; padding: 30px; border-radius: 10px; max-width: 400px; width: 90%;">
+                <h2 style="margin-bottom: 20px; text-align: center;">Login to LexBot</h2>
+                
+                <div id="emailStep">
+                    <input type="email" id="emailInput" placeholder="Enter your email" style="width: 100%; padding: 10px; margin-bottom: 10px; border: 1px solid #ddd; border-radius: 5px;">
+                    <button id="sendOtpBtn" style="width: 100%; padding: 10px; background: #8FCC33; color: white; border: none; border-radius: 5px; cursor: pointer;">Send OTP</button>
+                </div>
+                
+                <div id="otpStep" style="display: none;">
+                    <p style="margin-bottom: 10px;">OTP sent to <strong id="sentEmail"></strong></p>
+                    <input type="text" id="otpInput" placeholder="Enter 6-digit OTP" maxlength="6" style="width: 100%; padding: 10px; margin-bottom: 10px; border: 1px solid #ddd; border-radius: 5px;">
+                    <button id="verifyOtpBtn" style="width: 100%; padding: 10px; background: #8FCC33; color: white; border: none; border-radius: 5px; cursor: pointer;">Verify OTP</button>
+                    <button id="backToEmailBtn" style="width: 100%; padding: 10px; margin-top: 10px; background: #ddd; border: none; border-radius: 5px; cursor: pointer;">Back</button>
+                </div>
+                
+                <div id="authError" style="color: red; margin-top: 10px; text-align: center; display: none;"></div>
+            </div>
+        </div>
+    `;
+    
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+    
+    document.getElementById('sendOtpBtn').addEventListener('click', sendOTP);
+    document.getElementById('verifyOtpBtn').addEventListener('click', verifyOTP);
+    document.getElementById('backToEmailBtn').addEventListener('click', () => {
+        document.getElementById('emailStep').style.display = 'block';
+        document.getElementById('otpStep').style.display = 'none';
+        document.getElementById('authError').style.display = 'none';
+    });
+}
+
+
+async function sendOTP() {
+    const email = document.getElementById('emailInput').value.trim();
+    const errorDiv = document.getElementById('authError');
+    const btn = document.getElementById('sendOtpBtn'); 
+    
+    if (!email || !email.includes('@')) {
+        errorDiv.textContent = 'Please enter a valid email';
+        errorDiv.style.display = 'block';
+        return;
+    }
+
+    const originalText = btn.innerHTML; 
+    btn.disabled = true;
+    btn.innerHTML = '<span class="btn-spinner"></span> Sending...';
+    errorDiv.style.display = 'none';
+    
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/auth/send-otp`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email })
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+            document.getElementById('emailStep').style.display = 'none';
+            document.getElementById('otpStep').style.display = 'block';
+            document.getElementById('sentEmail').textContent = email;
+            errorDiv.style.display = 'none';
+        } else {
+            errorDiv.textContent = data.error || 'Failed to send OTP';
+            errorDiv.style.display = 'block';
+        }
+    } catch (error) {
+        errorDiv.textContent = 'Network error. Please try again.';
+        errorDiv.style.display = 'block';
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = originalText;
+    }
+}
+
+async function verifyOTP() {
+    const email = document.getElementById('emailInput').value.trim();
+    const otp = document.getElementById('otpInput').value.trim();
+    const errorDiv = document.getElementById('authError');
+    const btn = document.getElementById('verifyOtpBtn');
+    
+    if (!otp || otp.length !== 6) {
+        errorDiv.textContent = 'Please enter 6-digit OTP';
+        errorDiv.style.display = 'block';
+        return;
+    }
+
+    const originalText = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="btn-spinner"></span> Verifying...';
+    errorDiv.style.display = 'none';
+    
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/auth/verify-otp`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, otp })
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+            setAuthToken(data.token);
+            setAuthUser(data.user);
+            document.getElementById('authModal').remove();
+            
+            // Open chatbot if it was triggered
+            const fab = document.getElementById("fab");
+            if (fab) fab.click();
+            
+            // Refresh the page or UI to show logged in state (Optional)
+            window.location.reload(); 
+        } else {
+            errorDiv.textContent = data.error || 'Invalid OTP';
+            errorDiv.style.display = 'block';
+        }
+    } catch (error) {
+        errorDiv.textContent = 'Network error. Please try again.';
+        errorDiv.style.display = 'block';
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = originalText;
+    }
+}
+
+// Logout function
+function logout() {
+    removeAuthToken();
+    clearChatSession();
+    window.location.reload();
+}
+window.logout = logout;
+
 document.addEventListener("DOMContentLoaded", function() {
     console.log("clearChatSession() - Reset everything");
+    console.log("logout() - Logout from the system");
 });
