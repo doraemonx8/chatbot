@@ -156,6 +156,22 @@ class ParamExtractorTool {
       new HumanMessage(message),
     ]);
   }
+  // async extract(message, memory) {
+  //   // 1. Capture the response
+  //   const result = await this.llm.invoke([
+  //     new SystemMessage(extractParametersPrompt),
+  //     ...memory,
+  //     new HumanMessage(message),
+  //   ]);
+
+  //   // 2. LOG THE OUTPUT HERE
+  //   console.log("\n🔍 --- EXTRACTED PARAMETERS (BOT PROMPT OUTPUT) ---");
+  //   console.log(JSON.stringify(result, null, 2));
+  //   console.log("---------------------------------------------------\n");
+
+  //   // 3. Return the result as before
+  //   return result;
+  // }
 }
 
 

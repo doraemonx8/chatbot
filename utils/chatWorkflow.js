@@ -195,13 +195,28 @@ async _extractSelectTool(state) {
         console.log(`⏱️  Selection Time: Skipped (Mode Override)`);
       }
 
+      // // Merge params
+      // const existingParams = state.params || {};
+      // const mergedParams = Object.keys(existingParams).reduce((acc, key) => {
+      //   acc[key] = newParams[key] ? newParams[key] : existingParams[key];
+      //   return acc;
+      // }, { ...newParams });
+
+      // const finalTool = selectedTool.toolName || "getQueryContext";
+      
+      // Define which params should STICK (persist across turns)
+      const stickyParams = ["state", "geographyType"];
       // Merge params
       const existingParams = state.params || {};
-      const mergedParams = Object.keys(existingParams).reduce((acc, key) => {
-        acc[key] = newParams[key] ? newParams[key] : existingParams[key];
-        return acc;
-      }, { ...newParams });
-
+      const mergedParams = { ...newParams };
+      // Only copy over sticky params if they are missing in the new extraction
+      stickyParams.forEach((key) => {
+        if (!mergedParams[key] && existingParams[key]) {
+          mergedParams[key] = existingParams[key];
+        }
+      });
+      // For everything else (formName, criticality, etc.), 
+      // we trust the NEW extraction (even if it is null, effectively clearing the filter).
       const finalTool = selectedTool.toolName || "getQueryContext";
       const fnEnd = performance.now();
 

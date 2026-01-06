@@ -12,54 +12,39 @@ Analyze the message to extract governance details and metadata filters.
 **Extraction Rules:**
 
 1. **Governance (Standard):**
-   - **geographyType:** "central" (India-wide), "state" (Rules/Forms), or "both".
+   - **geographyType:** "central" (Specific central acts), "state" (Specific state rules), or "both" (DEFAULT if no specific state or act is mentioned, or if the topic applies to both).
    - **state:** Extract specific state (e.g., "Haryana"). Defaults to null if implied ("local rules", "my state") or using state-specific forms (e.g., "Form M-5").
 
 2. **Metadata Filters (Extract ONLY if explicitly mentioned):**
 
-   - **subHead (Topic/Category):**
-     - Look for: "Registration", "Returns", "Registers", "Display", "Payment", "Maternity Benefit", "Notices".
-     - *Example:* "How do I file returns?" -> subHead: "Returns"
+   - **subHead (Topic/Category) - Map keywords strictly to these categories:**
+     - **"Acknowledgment Compliance"**: Look for "Acknowledgment", "Acknowledgement", "Applicability", "Extent", "Coverage".
+     - **"Display Compliance"**: Look for "Display", "Exhibit", "Abstract", "Notice Board", "Show".
+     - **"Records/Registers"**: Look for "Register", "Records", "Log", "Book", "Maintain", "Form XXII".
+     - **"Returns"**: Look for "Return", "Filing", "Annual Return", "Unified Return", "Form XXIII".
+     - **"Other Compliance"**: Look for "Maternity Benefit", "Payment", "Creche", "Nursing", "Medical Bonus", "Leave", "Miscarriage", "Tubectomy", "Dismissal", "Discharge".
 
    - **criticality (Risk):**
-     - Look for: "Critical", "High Risk", "Major", "Severe". Map to "High".
-     - Look for: "Minor", "Low Risk". Map to "Low".
+     - Look for: "Critical", "High Risk", "Major", "Severe" → Map to "High".
+     - Look for: "Minor", "Low Risk" → Map to "Low".
+     - Look for: "Medium" → Map to "Medium".
 
-   - **potentialImpact (Consequence):**
-     - Look for: "Penalty", "Fine", "Punishment", "Imprisonment", "Prosecution".
-     - *Example:* "What is the penalty for this?" -> potentialImpact: "Fine" (or generic keyword)
+   - **periodicity (Frequency):**
+     - Look for: "One Time", "On Going", "Annual", "Annually", "Event Based".
 
-   - **triggerEvent (Event):**
-     - Look for: "Hiring", "Termination", "Confinement", "Delivery", "Death", "Miscarriage", "Wages".
-     - *Example:* "What to do after delivery?" -> triggerEvent: "Delivery"
-
-   - **authority (Official):**
-     - Look for: "Inspector", "Facilitator", "Chief Inspector", "Commissioner".
-
-   - **Identification:**
-     - **actName:** Extract explicit Act names.
-     - **section:** Extract "Section X".
-     - **rule:** Extract "Rule X".
-     - **formName:** Extract "Form X", "Form M-5", "Form XXII".
-     - **department:** Extract "Labour Dept", etc.
+   - **formName (Specific Form):**
+     - Look for explicit form references like "Form M-5", "Form M-1", "Form M-2", "Form M-2A", "Form M-2B", "Form M-3", "Form M-4", "Form XXII", "Form XXIII", "Form A-1".
+     - *Note:* Do not extract generic words like "application form". Only specific alphanumeric IDs.
 
 **Output JSON Schema:**
 {
   "isOffTopic": boolean,
   "geographyType": "central" | "state" | "both",
   "state": string | null,
-  "actName": string | null,
   "subHead": string | null,
-  "section": string | null,
-  "rule": string | null,
   "formName": string | null,
   "criticality": "High" | "Medium" | "Low" | null,
-  "periodicity": string | null,
-  "department": string | null,
-  "authority": string | null,
-  "complianceType": string | null,
-  "potentialImpact": string | null,
-  "triggerEvent": string | null
+  "periodicity": string | null
 }`;
 
 const offTopicPrompt = `You are 'LexBot,' a conversational assistant for LexCompliance, specializing in compliances and legal acts in India.
